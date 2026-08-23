@@ -3,7 +3,7 @@
 ## 1. Live Application
 
 Frontend:
-https://marketmind-ai-app.onrender.com/
+https://small-business-sales-intelligence-platform-sb7-team4.streamlit.app/
 
 ## 2. Backend API
 
