@@ -58,29 +58,32 @@ def login_page():
                         st.error("Please enter a valid email address.")
                     else:
                         email_clean = email.strip().lower()
-                        try:
-                            res = requests.post(
-                                f"{BASE_URL}/auth/forgot-password",
-                                json={"email": email_clean},
-                                headers={"x-bypass-rate-limit": "true"},
-                                timeout=10
-                            )
-                            if res.status_code == 200:
-                                res_data = res.json()
-                                st.session_state.forgot_email = email_clean
-                                st.session_state.forgot_otp = str(res_data.get("otp", "")).strip()
-                                st.session_state.forgot_email_sent = res_data.get("email_sent", False)
-                                st.session_state.forgot_step = 2
-                                st.rerun()
-                            elif res.status_code == 404:
-                                st.error("❌ No account found with this email address. Please check your email or register.")
-                            elif res.status_code == 429:
-                                st.error("⏳ Rate limit exceeded. Please wait a moment before trying again.")
-                            else:
-                                err_detail = res.json().get("detail", res.text) if res.text else "Unknown error"
-                                st.error(f"❌ Failed to request password reset ({res.status_code}): {err_detail}")
-                        except Exception as e:
-                            st.error(f"❌ Could not connect to API Gateway ({BASE_URL}): {str(e)}")
+                        with st.spinner("Connecting to security gateway & sending OTP..."):
+                            try:
+                                res = requests.post(
+                                    f"{BASE_URL}/auth/forgot-password",
+                                    json={"email": email_clean},
+                                    headers={"x-bypass-rate-limit": "true"},
+                                    timeout=35
+                                )
+                                if res.status_code == 200:
+                                    res_data = res.json()
+                                    st.session_state.forgot_email = email_clean
+                                    st.session_state.forgot_otp = str(res_data.get("otp", "")).strip()
+                                    st.session_state.forgot_email_sent = res_data.get("email_sent", False)
+                                    st.session_state.forgot_step = 2
+                                    st.rerun()
+                                elif res.status_code == 404:
+                                    st.error("❌ No account found with this email address. Please check your email or register.")
+                                elif res.status_code == 429:
+                                    st.error("⏳ Rate limit exceeded. Please wait a moment before trying again.")
+                                else:
+                                    err_detail = res.json().get("detail", res.text) if res.text else "Unknown error"
+                                    st.error(f"❌ Failed to request password reset ({res.status_code}): {err_detail}")
+                            except requests.exceptions.Timeout:
+                                st.warning("⚠️ Connection timed out while waking up the Render API Gateway server. The server is waking up from idle mode — please click 'Send Reset Email' once more.")
+                            except Exception as e:
+                                st.error(f"❌ Could not connect to API Gateway ({BASE_URL}): {str(e)}")
 
             # ==================================================
             # STEP 2: Enter OTP & Reset Password
@@ -130,67 +133,73 @@ def login_page():
                         elif new_password != confirm_password:
                             st.error("Passwords do not match.")
                         else:
-                            try:
-                                # 1. Verify OTP with Gateway
-                                verify_res = requests.post(
-                                    f"{BASE_URL}/auth/verify-otp",
-                                    json={"email": st.session_state.forgot_email, "otp": entered_otp},
-                                    headers={"x-bypass-rate-limit": "true"},
-                                    timeout=10
-                                )
-                                if verify_res.status_code == 200:
-                                    reset_token = verify_res.json().get("reset_token")
-                                    # 2. Reset password on Gateway
-                                    reset_res = requests.post(
-                                        f"{BASE_URL}/auth/reset-password",
-                                        json={
-                                            "email": st.session_state.forgot_email,
-                                            "reset_token": reset_token,
-                                            "new_password": new_password
-                                        },
+                            with st.spinner("Verifying OTP & resetting password..."):
+                                try:
+                                    # 1. Verify OTP with Gateway
+                                    verify_res = requests.post(
+                                        f"{BASE_URL}/auth/verify-otp",
+                                        json={"email": st.session_state.forgot_email, "otp": entered_otp},
                                         headers={"x-bypass-rate-limit": "true"},
-                                        timeout=10
+                                        timeout=30
                                     )
-                                    if reset_res.status_code == 200:
-                                        st.session_state.reset_success_msg = "🎉 Password reset successfully! Please sign in with your new password."
-                                        st.session_state.default_username = st.session_state.forgot_email
-                                        st.session_state.forgot_password = False
-                                        st.session_state.forgot_step = 1
-                                        st.session_state.forgot_email = ""
-                                        if "forgot_otp" in st.session_state:
-                                            del st.session_state["forgot_otp"]
-                                        if "forgot_email_sent" in st.session_state:
-                                            del st.session_state["forgot_email_sent"]
-                                        st.rerun()
+                                    if verify_res.status_code == 200:
+                                        reset_token = verify_res.json().get("reset_token")
+                                        # 2. Reset password on Gateway
+                                        reset_res = requests.post(
+                                            f"{BASE_URL}/auth/reset-password",
+                                            json={
+                                                "email": st.session_state.forgot_email,
+                                                "reset_token": reset_token,
+                                                "new_password": new_password
+                                            },
+                                            headers={"x-bypass-rate-limit": "true"},
+                                            timeout=30
+                                        )
+                                        if reset_res.status_code == 200:
+                                            st.session_state.reset_success_msg = "🎉 Password reset successfully! Please sign in with your new password."
+                                            st.session_state.default_username = st.session_state.forgot_email
+                                            st.session_state.forgot_password = False
+                                            st.session_state.forgot_step = 1
+                                            st.session_state.forgot_email = ""
+                                            if "forgot_otp" in st.session_state:
+                                                del st.session_state["forgot_otp"]
+                                            if "forgot_email_sent" in st.session_state:
+                                                del st.session_state["forgot_email_sent"]
+                                            st.rerun()
+                                        else:
+                                            err_msg = reset_res.json().get("detail", "Password reset failed.")
+                                            st.error(f"❌ Password update failed: {err_msg}")
                                     else:
-                                        err_msg = reset_res.json().get("detail", "Password reset failed.")
-                                        st.error(f"❌ Password update failed: {err_msg}")
-                                else:
-                                    err_msg = verify_res.json().get("detail", "Invalid OTP code.")
-                                    st.error(f"❌ OTP verification failed: {err_msg}")
-                            except Exception as e:
-                                st.error(f"❌ Connection error during password reset: {str(e)}")
+                                        err_msg = verify_res.json().get("detail", "Invalid OTP code.")
+                                        st.error(f"❌ OTP verification failed: {err_msg}")
+                                except requests.exceptions.Timeout:
+                                    st.warning("⚠️ Request timed out. Please try again.")
+                                except Exception as e:
+                                    st.error(f"❌ Connection error during password reset: {str(e)}")
 
                 with col2:
                     if st.button("Resend OTP", width="stretch"):
-                        try:
-                            res = requests.post(
-                                f"{BASE_URL}/auth/forgot-password",
-                                json={"email": st.session_state.forgot_email},
-                                headers={"x-bypass-rate-limit": "true"},
-                                timeout=10
-                            )
-                            if res.status_code == 200:
-                                res_data = res.json()
-                                st.session_state.forgot_otp = str(res_data.get("otp", "")).strip()
-                                st.session_state.forgot_email_sent = res_data.get("email_sent", False)
-                                st.success("✅ A new OTP code has been generated!")
-                                st.rerun()
-                            else:
-                                err_msg = res.json().get("detail", "Failed to resend OTP.")
-                                st.error(f"❌ Could not resend OTP: {err_msg}")
-                        except Exception as e:
-                            st.error(f"❌ Error communicating with Gateway: {str(e)}")
+                        with st.spinner("Requesting new OTP code..."):
+                            try:
+                                res = requests.post(
+                                    f"{BASE_URL}/auth/forgot-password",
+                                    json={"email": st.session_state.forgot_email},
+                                    headers={"x-bypass-rate-limit": "true"},
+                                    timeout=35
+                                )
+                                if res.status_code == 200:
+                                    res_data = res.json()
+                                    st.session_state.forgot_otp = str(res_data.get("otp", "")).strip()
+                                    st.session_state.forgot_email_sent = res_data.get("email_sent", False)
+                                    st.success("✅ A new OTP code has been generated!")
+                                    st.rerun()
+                                else:
+                                    err_msg = res.json().get("detail", "Failed to resend OTP.")
+                                    st.error(f"❌ Could not resend OTP: {err_msg}")
+                            except requests.exceptions.Timeout:
+                                st.warning("⚠️ Request timed out while server was waking up. Please try again.")
+                            except Exception as e:
+                                st.error(f"❌ Error communicating with Gateway: {str(e)}")
 
             st.markdown("---")
 

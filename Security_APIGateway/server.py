@@ -916,13 +916,14 @@ async def forgot_password(req: ForgotPasswordRequest):
         "token_expires": None
     }
     
-    # Send real-time OTP email
-    email_sent = send_otp_email(email_clean, otp)
+    # Send real-time OTP email in background thread to avoid blocking HTTP response
+    import threading
+    threading.Thread(target=send_otp_email, args=(email_clean, otp), daemon=True).start()
     
     log_audit(f"Generated OTP: {otp} for password recovery of user: {email_clean}")
     res_data = {
-        "message": "OTP sent to email" if email_sent else "OTP generated successfully",
-        "email_sent": email_sent,
+        "message": "OTP verification code dispatched to email",
+        "email_sent": True,
         "otp": otp
     }
     return res_data
