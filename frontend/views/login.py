@@ -68,9 +68,23 @@ def login_page():
                                 )
                                 if res.status_code == 200:
                                     res_data = res.json()
+                                    otp_val = str(res_data.get("otp", "")).strip()
                                     st.session_state.forgot_email = email_clean
-                                    st.session_state.forgot_otp = str(res_data.get("otp", "")).strip()
-                                    st.session_state.forgot_email_sent = res_data.get("email_sent", False)
+                                    st.session_state.forgot_otp = otp_val
+
+                                    # Attempt direct email dispatch using Streamlit secrets
+                                    email_sent = False
+                                    dispatch_err = ""
+                                    try:
+                                        from services.email_dispatch import send_password_reset_otp_email
+                                        d_res = send_password_reset_otp_email(email_clean, otp_val)
+                                        email_sent = bool(d_res.get("success"))
+                                        dispatch_err = str(d_res.get("error", ""))
+                                    except Exception as ex:
+                                        dispatch_err = str(ex)
+
+                                    st.session_state.forgot_email_sent = email_sent
+                                    st.session_state.forgot_dispatch_error = dispatch_err
                                     st.session_state.forgot_step = 2
                                     st.rerun()
                                 elif res.status_code == 404:
@@ -91,13 +105,18 @@ def login_page():
             elif st.session_state.forgot_step == 2:
                 if st.session_state.get("forgot_email_sent") is True:
                     st.success(f"📧 A 6-digit OTP verification code has been dispatched to **{st.session_state.forgot_email}**! Please check your inbox and spam folder.")
-                elif st.session_state.get("forgot_otp"):
-                    st.info(
-                        f"📧 Verification code requested for **{st.session_state.forgot_email}**.\n\n"
-                        f"🔑 **OTP Verification Code:** `{st.session_state.forgot_otp}`"
-                    )
                 else:
-                    st.info(f"📧 Verification code requested for **{st.session_state.forgot_email}**.")
+                    err_msg = st.session_state.get("forgot_dispatch_error", "")
+                    if err_msg and ("BadCredentials" in err_msg or "535" in err_msg):
+                        st.warning("⚠️ **Gmail Authentication Error**: Google rejected the App Password (`BadCredentials`). Please verify that 2-Step Verification is active and generate a fresh 16-character password at [Google App Passwords](https://myaccount.google.com/apppasswords).")
+                    elif err_msg:
+                        st.warning(f"⚠️ Email could not be sent ({err_msg}).")
+
+                    if st.session_state.get("forgot_otp"):
+                        st.info(
+                            f"🔑 **OTP Verification Code:** `{st.session_state.forgot_otp}`\n\n"
+                            f"*(You can enter this 6-digit code below to reset your password without waiting for email delivery).* "
+                        )
 
                 otp = st.text_input(
                     "Enter 6-Digit OTP",
@@ -165,6 +184,8 @@ def login_page():
                                                 del st.session_state["forgot_otp"]
                                             if "forgot_email_sent" in st.session_state:
                                                 del st.session_state["forgot_email_sent"]
+                                            if "forgot_dispatch_error" in st.session_state:
+                                                del st.session_state["forgot_dispatch_error"]
                                             st.rerun()
                                         else:
                                             err_msg = reset_res.json().get("detail", "Password reset failed.")
@@ -189,8 +210,21 @@ def login_page():
                                 )
                                 if res.status_code == 200:
                                     res_data = res.json()
-                                    st.session_state.forgot_otp = str(res_data.get("otp", "")).strip()
-                                    st.session_state.forgot_email_sent = res_data.get("email_sent", False)
+                                    otp_val = str(res_data.get("otp", "")).strip()
+                                    st.session_state.forgot_otp = otp_val
+
+                                    email_sent = False
+                                    dispatch_err = ""
+                                    try:
+                                        from services.email_dispatch import send_password_reset_otp_email
+                                        d_res = send_password_reset_otp_email(st.session_state.forgot_email, otp_val)
+                                        email_sent = bool(d_res.get("success"))
+                                        dispatch_err = str(d_res.get("error", ""))
+                                    except Exception as ex:
+                                        dispatch_err = str(ex)
+
+                                    st.session_state.forgot_email_sent = email_sent
+                                    st.session_state.forgot_dispatch_error = dispatch_err
                                     st.success("✅ A new OTP code has been generated!")
                                     st.rerun()
                                 else:
@@ -211,6 +245,8 @@ def login_page():
                     del st.session_state["forgot_otp"]
                 if "forgot_email_sent" in st.session_state:
                     del st.session_state["forgot_email_sent"]
+                if "forgot_dispatch_error" in st.session_state:
+                    del st.session_state["forgot_dispatch_error"]
                 st.rerun()
 
         return
