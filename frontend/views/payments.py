@@ -121,38 +121,12 @@ def payments_page():
                     st.success("Payment Added Successfully")
                     fetch_payments_data.clear()
                     st.balloons()
-
-                    try:
-
-                        st.subheader("Backend Response")
-
-                        st.json(
-                            response.json()
-                        )
-
-                    except Exception:
-
-                        st.write(
-                            response.text
-                        )
-
                 else:
-
-                    st.error(
-                        f"Failed (HTTP {response.status_code})"
-                    )
-
                     try:
-
-                        st.json(
-                            response.json()
-                        )
-
+                        err_detail = response.json().get("detail", f"Failed (HTTP {response.status_code})")
                     except Exception:
-
-                        st.write(
-                            response.text
-                        )
+                        err_detail = f"Failed (HTTP {response.status_code})"
+                    st.error(err_detail)
 
             except requests.exceptions.ConnectionError:
 

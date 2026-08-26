@@ -100,9 +100,12 @@ def dashboard_page():
             )
                 # ---------------- KPI Values ---------------- #
 
-        total_revenue = float(
-            revenue.get("total_revenue") or 0
-        )
+        if "total_amount" in sales_df.columns and not sales_df.empty:
+            total_revenue = float(sales_df["total_amount"].sum())
+        else:
+            total_revenue = float(
+                revenue.get("total_revenue") or 0
+            )
 
         total_outstanding = float(
             revenue.get("total_outstanding") or 0

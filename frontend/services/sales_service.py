@@ -210,11 +210,19 @@ def _fetch_base_revenue_summary(base_url=DB_BASE_URL):
 
 def fetch_revenue_summary(base_url=DB_BASE_URL):
     """
-    Returns revenue summary including contributions from custom appended CSV files.
+    Returns revenue summary including contributions from base sales data and custom appended CSV files.
     """
     base_rev = _fetch_base_revenue_summary(base_url).copy()
+    try:
+        sales_df = fetch_all_sales_df(base_url)
+        if not sales_df.empty and "total_amount" in sales_df.columns:
+            tot_rev = float(sales_df["total_amount"].sum())
+            base_rev["total_revenue"] = f"{tot_rev:.2f}"
+            return base_rev
+    except Exception:
+        pass
+
     uploaded_files = st.session_state.get("uploaded_sales_files", [])
-    
     if uploaded_files:
         extra_rev = sum(float(f.get("total_amount", 0)) for f in uploaded_files)
         try:

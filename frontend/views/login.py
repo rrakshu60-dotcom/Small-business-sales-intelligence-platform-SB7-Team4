@@ -261,7 +261,6 @@ def login_page():
 
         st.title("MarketMind AI Login")
         st.caption("Please sign in to continue")
-        st.caption(f"Security Gateway: `{BASE_URL}`")
         st.markdown("---")
 
         if st.session_state.get("reset_success_msg"):

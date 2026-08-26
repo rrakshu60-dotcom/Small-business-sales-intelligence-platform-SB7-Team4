@@ -114,12 +114,15 @@ def business_overview_page():
         # KPI Calculations
         # ============================================================
 
-        total_revenue = float(
-            revenue.get(
-                "total_revenue",
-                0
+        if "total_amount" in sales_df.columns and not sales_df.empty:
+            total_revenue = float(sales_df["total_amount"].sum())
+        else:
+            total_revenue = float(
+                revenue.get(
+                    "total_revenue",
+                    0
+                )
             )
-        )
 
         total_outstanding = float(
             revenue.get(

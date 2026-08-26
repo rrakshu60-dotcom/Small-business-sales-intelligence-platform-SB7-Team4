@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.models.invoice import Invoice
 from app.models.payment import Payment
+from app.models.sales_transaction import SalesTransaction
 
 # =====================================================
 # Total Revenue
@@ -14,6 +15,16 @@ from app.models.payment import Payment
 def get_total_revenue(
     db: Session
 ):
+
+    sales_total = (
+        db.query(
+            func.sum(SalesTransaction.total_amount)
+        )
+        .scalar()
+    )
+
+    if sales_total is not None and sales_total > 0:
+        return sales_total
 
     total = (
         db.query(
